@@ -19,11 +19,12 @@ volatile unsigned long throttlePulseLastChangeMs = 0;
 volatile int pulseWidthThrottle = 0;
 #define THROTTLE_PIN A0
 
-void throttleSignalInterrupt() {
+ISR(PCINT1_vect) {
+    // @ todo: interrupts will fire here for A0-A3, if you use more than one you will need to test which pin changed
     if ((digitalRead(THROTTLE_PIN) == 0)) {
-        pulseWidthThrottle = millis() - throttlePulseLastChangeMs;
+        pulseWidthThrottle = micros() - throttlePulseLastChangeMs;
     } else {
-        throttlePulseLastChangeMs = millis();
+        throttlePulseLastChangeMs = micros();
     }
 }
 
@@ -32,8 +33,10 @@ void setup() {
     delay(10);
     digitalWrite(13, 1);
     pinMode(THROTTLE_PIN, INPUT);
-    //    digitalWrite(THROTTLE_PIN, HIGH); // the receiver should not need the pull up enabled
-    attachInterrupt(digitalPinToInterrupt(THROTTLE_PIN), throttleSignalInterrupt, CHANGE);
+    cli();
+    PCICR = 0x02;
+    PCMSK1 = 0b00000111;
+    sei();
 }
 
 void loop() {
@@ -54,5 +57,5 @@ void loop() {
     }
     Serial.print("Throttle: ");
     Serial.print(pulseWidthThrottle);
-    Serial.println("ms");
+    Serial.println("us");
 }
