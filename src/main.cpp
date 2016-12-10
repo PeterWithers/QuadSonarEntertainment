@@ -6,11 +6,14 @@
 
 #include <NewPing.h>
 
-#define TRIGGER_PIN  3
-#define ECHO_PIN     2
+#define TRIGGER_PIN_FORWARD  3
+#define ECHO_PIN_FORWARD     2
+// @todo: add defines for TRIGGER_PIN_RIGHT and ECHO_PIN_RIGHT once the desired pins have been assigned
+// @todo: add left and back sonar definitions
 #define MAX_DISTANCE 400
 
-NewPing sonar(TRIGGER_PIN, ECHO_PIN, MAX_DISTANCE);
+NewPing sonarForward(TRIGGER_PIN_FORWARD, ECHO_PIN_FORWARD, MAX_DISTANCE);
+//NewPing sonarRight(TRIGGER_PIN_RIGHT, ECHO_PIN_RIGHT, MAX_DISTANCE);
 
 void setup() {
     Serial.begin(57600);
@@ -20,12 +23,16 @@ void setup() {
 
 void loop() {
     delay(1000);
-    Serial.print("Ping: ");
-    int distanceValue = sonar.ping_cm();
-    Serial.print(distanceValue);
-    Serial.print("cm: ");
-    Serial.println(millis());
-    if (distanceValue > 100)
+    int forwardDistance = sonarForward.ping_cm();
+//    int rightDistance = sonarRight.ping_cm(); // @todo
+    Serial.print("forward: ");
+    Serial.print(forwardDistance);
+    Serial.print("cm right:");
+    Serial.print("(todo)"); // @ todo
+    Serial.print("cm in ");
+    Serial.print(millis());
+    Serial.println("ms");
+    if (forwardDistance > 100)
         digitalWrite(13, 1);
     else
         digitalWrite(13, 0);
