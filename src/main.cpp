@@ -8,16 +8,20 @@
 
 #define TRIGGER_PIN_FORWARD  3
 #define ECHO_PIN_FORWARD     2
+
+#define TRIGGER_PIN_RIGHT
+#define ECHO_PIN_RIGHT
 // @todo: add defines for TRIGGER_PIN_RIGHT and ECHO_PIN_RIGHT once the desired pins have been assigned
 // @todo: add left and back sonar definitions
 #define MAX_DISTANCE 400
 
 NewPing sonarForward(TRIGGER_PIN_FORWARD, ECHO_PIN_FORWARD, MAX_DISTANCE);
-//NewPing sonarRight(TRIGGER_PIN_RIGHT, ECHO_PIN_RIGHT, MAX_DISTANCE);
+NewPing sonarRight(TRIGGER_PIN_RIGHT, ECHO_PIN_RIGHT, MAX_DISTANCE);
 
 volatile unsigned long throttlePulseLastChangeMs = 0;
 volatile int pulseWidthThrottle = 0;
 #define THROTTLE_PIN A0
+#define YAW_PIN A1
 
 ISR(PCINT1_vect) {
     // @ todo: interrupts will fire here for A0-A3, if you use more than one you will need to test which pin changed
