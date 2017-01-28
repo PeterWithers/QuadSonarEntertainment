@@ -6,6 +6,7 @@
 
 #include <NewPing.h>
 #include <Servo.h>
+#include <PID_v1.h>
 
 #define TRIGGER_PIN_HEIGHT  3
 #define ECHO_PIN_HEIGHT     2
@@ -29,6 +30,10 @@ volatile int pulseWidthThrottle = 0;
 #define THROTTLE_PIN_OUT 13
 //#define YAW_PIN A1
 
+//PID variables
+double pidSetPoint, pidInput, pidOutput;
+PID throttlePID(&pidInput, &pidOutput, &pidSetPoint, 2, 5, 1, DIRECT);
+
 Servo throttleOutputServo;
 
 ISR(PCINT1_vect) {
@@ -46,6 +51,9 @@ void setup() {
     digitalWrite(13, 1);
     pinMode(THROTTLE_PIN, INPUT);
     throttleOutputServo.attach(THROTTLE_PIN_OUT);
+    pidInput = 60; //arbitrary initial value 
+    pidSetPoint = 60;
+    throttlePID.SetMode(AUTOMATIC);
     cli();
     PCICR = 0x02;
     PCMSK1 = 0b00000111;
@@ -83,8 +91,14 @@ void loop() {
     Serial.print(pulseWidthThrottle);
     Serial.println("us");
     int throttleOutputDegrees = map(pulseWidthThrottle, 1000, 2000, 0, 180);
-    
+
     Serial.print("Throttle out: ");
     Serial.println(throttleOutputDegrees);
     throttleOutputServo.write(throttleOutputDegrees);
+
+    pidInput = verticalDistance;
+    throttlePID.Compute();
+    Serial.print("PID out: ");
+    Serial.println(pidOutput);
+
 }
