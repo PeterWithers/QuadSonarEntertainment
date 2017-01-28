@@ -61,7 +61,7 @@ void setup() {
 }
 
 void loop() {
-    delay(1000);
+    delay(100);
     //int forwardDistance = sonarForward.ping_cm();
     int verticalDistance = sonarHeight.ping_cm();
     //    int rightDistance = sonarRight.ping_cm(); // @todo
@@ -87,18 +87,22 @@ void loop() {
         digitalWrite(13, 0);
     }
 
-    Serial.print("Throttle in: ");
-    Serial.print(pulseWidthThrottle);
-    Serial.println("us");
-    int throttleOutputDegrees = map(pulseWidthThrottle, 1000, 2000, 0, 180);
-
-    Serial.print("Throttle out: ");
-    Serial.println(throttleOutputDegrees);
-    throttleOutputServo.write(throttleOutputDegrees);
-
     pidInput = verticalDistance;
     throttlePID.Compute();
     Serial.print("PID out: ");
     Serial.println(pidOutput);
-
+    
+    Serial.print("Throttle in: ");
+    Serial.print(pulseWidthThrottle);
+    Serial.println("us");
+    
+    int throttleInputDegrees = map(pulseWidthThrottle, 1000, 2000, 0, 180);
+    Serial.print("Throttle in: ");
+    Serial.println(throttleInputDegrees);
+    
+    int throttleOutputDegrees = throttleInputDegrees * pidOutput / 255;
+    
+    Serial.print("Throttle out: ");
+    Serial.println(throttleOutputDegrees);
+    throttleOutputServo.write(throttleOutputDegrees);
 }
