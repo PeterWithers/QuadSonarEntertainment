@@ -29,7 +29,7 @@ volatile int pulseWidthThrottle = 0;
 #define THROTTLE_PIN_OUT 13
 //#define YAW_PIN A1
 
-Servo throttleOutput;
+Servo throttleOutputServo;
 
 ISR(PCINT1_vect) {
     // @ todo: interrupts will fire here for A0-A3, if you use more than one you will need to test which pin changed
@@ -45,7 +45,7 @@ void setup() {
     delay(10);
     digitalWrite(13, 1);
     pinMode(THROTTLE_PIN, INPUT);
-    throttleOutput.attach(THROTTLE_PIN_OUT);
+    throttleOutputServo.attach(THROTTLE_PIN_OUT);
     cli();
     PCICR = 0x02;
     PCMSK1 = 0b00000111;
@@ -79,7 +79,12 @@ void loop() {
         digitalWrite(13, 0);
     }
 
-    Serial.print("Throttle: ");
+    Serial.print("Throttle in: ");
     Serial.print(pulseWidthThrottle);
     Serial.println("us");
+    int throttleOutputDegrees = map(pulseWidthThrottle, 1000, 2000, 0, 180);
+    
+    Serial.print("Throttle out: ");
+    Serial.println(throttleOutputDegrees);
+    throttleOutputServo.write(throttleOutputDegrees);
 }
