@@ -5,6 +5,7 @@
  */
 
 #include <NewPing.h>
+#include <Servo.h>
 
 #define TRIGGER_PIN_HEIGHT  3
 #define ECHO_PIN_HEIGHT     2
@@ -25,7 +26,10 @@ NewPing sonarHeight(TRIGGER_PIN_HEIGHT, ECHO_PIN_HEIGHT, MAX_DISTANCE);
 volatile unsigned long throttlePulseLastChangeMs = 0;
 volatile int pulseWidthThrottle = 0;
 #define THROTTLE_PIN A0
+#define THROTTLE_PIN_OUT 13
 //#define YAW_PIN A1
+
+Servo throttleOutput;
 
 ISR(PCINT1_vect) {
     // @ todo: interrupts will fire here for A0-A3, if you use more than one you will need to test which pin changed
@@ -41,6 +45,7 @@ void setup() {
     delay(10);
     digitalWrite(13, 1);
     pinMode(THROTTLE_PIN, INPUT);
+    throttleOutput.attach(THROTTLE_PIN_OUT);
     cli();
     PCICR = 0x02;
     PCMSK1 = 0b00000111;
@@ -73,7 +78,7 @@ void loop() {
     } else {
         digitalWrite(13, 0);
     }
-    
+
     Serial.print("Throttle: ");
     Serial.print(pulseWidthThrottle);
     Serial.println("us");
