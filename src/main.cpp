@@ -48,16 +48,16 @@ ISR(PCINT1_vect) {
 void setup() {
     Serial.begin(57600);
     delay(10);
-    digitalWrite(13, 1);
+    digitalWrite(13, 1);    
+    cli();
+    PCICR = 0x02;
+    PCMSK1 = 0b00000111;
+    sei();
     pinMode(THROTTLE_PIN, INPUT);
     throttleOutputServo.attach(THROTTLE_PIN_OUT);
     pidInput = 60; //arbitrary initial value 
     pidSetPoint = 60;
     throttlePID.SetMode(AUTOMATIC);
-    cli();
-    PCICR = 0x02;
-    PCMSK1 = 0b00000111;
-    sei();
 }
 
 void loop() {
@@ -75,17 +75,6 @@ void loop() {
     Serial.print("cm in ");
     Serial.print(millis());
     Serial.println("ms");
-    /*if (forwardDistance > 100) {
-        digitalWrite(13, 1);
-    } else {
-        digitalWrite(13, 0);
-    }*/
-
-    if (verticalDistance > 100) {
-        digitalWrite(13, 1);
-    } else {
-        digitalWrite(13, 0);
-    }
 
     pidInput = verticalDistance;
     throttlePID.Compute();
