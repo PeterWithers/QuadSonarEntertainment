@@ -25,9 +25,19 @@ NewPing sonarHeight(TRIGGER_PIN_HEIGHT, ECHO_PIN_HEIGHT, MAX_DISTANCE);
 //NewPing sonarRight(TRIGGER_PIN_RIGHT, ECHO_PIN_RIGHT, MAX_DISTANCE);
 
 volatile unsigned long throttlePulseLastChangeMs = 0;
+volatile unsigned long trimpotPulseLastChangeMs = 0;
+volatile unsigned long switchPulseLastChangeMs = 0;
 volatile int pulseWidthThrottle = 0;
+volatile int pulseWidthTrimpot = 0;
+volatile int pulseWidthSwitch = 0;
+volatile bool trimpotPinLast = false;
+volatile bool switchPinLast = false;
+
 #define THROTTLE_PIN A0
 #define THROTTLE_PIN_OUT 13
+#define TRIMPOT_PIN 9
+#define SWITCH_PIN 8
+
 //#define YAW_PIN A1
 
 //PID variables
@@ -36,9 +46,25 @@ PID throttlePID(&pidInput, &pidOutput, &pidSetPoint, 2, 5, 1, DIRECT);
 
 Servo throttleOutputServo;
 
+ISR(PCINT0_vect) {
+    if (digitalRead(TRIMPOT_PIN) == 0 && trimpotPinLast) {
+        pulseWidthTrimpot = micros() - trimpotPulseLastChangeMs;
+        trimpotPinLast = false;
+    } else if (digitalRead(TRIMPOT_PIN) == 1 && !trimpotPinLast) {
+        trimpotPulseLastChangeMs = micros();
+        trimpotPinLast = true;
+    }
+    if (digitalRead(SWITCH_PIN) == 0 && switchPinLast) {
+        pulseWidthSwitch = micros() - switchPulseLastChangeMs;
+        switchPinLast = false;
+    } else if (digitalRead(SWITCH_PIN) == 1 && !switchPinLast) {
+        switchPulseLastChangeMs = micros();
+        switchPinLast = true;
+    }
+}
+
 ISR(PCINT1_vect) {
-    // @ todo: interrupts will fire here for A0-A3, if you use more than one you will need to test which pin changed
-    if ((digitalRead(THROTTLE_PIN) == 0)) {
+    if (digitalRead(THROTTLE_PIN) == 0) {
         pulseWidthThrottle = micros() - throttlePulseLastChangeMs;
     } else {
         throttlePulseLastChangeMs = micros();
@@ -48,14 +74,20 @@ ISR(PCINT1_vect) {
 void setup() {
     Serial.begin(57600);
     delay(10);
-    digitalWrite(13, 1);    
     cli();
-    PCICR = 0x02;
-    PCMSK1 = 0b00000111;
+    PCICR |= (1 << PCIE0);
+    PCICR |= (1 << PCIE1);
+
+    PCMSK0 |= (1 << PCINT0); // pin 8 switch
+    PCMSK0 |= (1 << PCINT1); // pin 9 trimpot
+    PCMSK1 |= (1 << PCINT8); // pin A1 throttle
+
     sei();
     pinMode(THROTTLE_PIN, INPUT);
+    pinMode(SWITCH_PIN, INPUT);
+    pinMode(TRIMPOT_PIN, INPUT);
     throttleOutputServo.attach(THROTTLE_PIN_OUT);
-    pidInput = 60; //arbitrary initial value 
+    pidInput = 60; //arbitrary initial value
     pidSetPoint = 60;
     throttlePID.SetMode(AUTOMATIC);
 }
@@ -70,28 +102,36 @@ void loop() {
     Serial.print("vertical: ");
     Serial.print(verticalDistance);
 
-    Serial.print("cm vertical:");
-    Serial.print("(todo)"); // @ todo
-    Serial.print("cm in ");
-    Serial.print(millis());
-    Serial.println("ms");
+//    Serial.print("cm vertical:");
+//    Serial.print("(todo)"); // @ todo
+//    Serial.print("cm in ");
+//    Serial.print(millis());
+//    Serial.print("ms ");
 
     pidInput = verticalDistance;
     throttlePID.Compute();
     Serial.print("PID out: ");
-    Serial.println(pidOutput);
-    
-    Serial.print("Throttle in: ");
+    Serial.print(pidOutput);
+
+    Serial.print(" Throttle in: ");
     Serial.print(pulseWidthThrottle);
-    Serial.println("us");
-    
+    Serial.print("us ");
+
+    Serial.print("Switch in: ");
+    Serial.print(pulseWidthSwitch);
+    Serial.print("us ");
+
+    Serial.print("Trimpot in: ");
+    Serial.print(pulseWidthTrimpot);
+    Serial.print("us ");
+
     int throttleInputDegrees = map(pulseWidthThrottle, 1000, 2000, 0, 180);
     Serial.print("Throttle in: ");
-    Serial.println(throttleInputDegrees);
-    
+    Serial.print(throttleInputDegrees);
+
     int throttleOutputDegrees = throttleInputDegrees * pidOutput / 255;
-    
-    Serial.print("Throttle out: ");
+
+    Serial.print(" Throttle out: ");
     Serial.println(throttleOutputDegrees);
     throttleOutputServo.write(throttleOutputDegrees);
 }
