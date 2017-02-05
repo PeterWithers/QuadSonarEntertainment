@@ -32,6 +32,7 @@ volatile int pulseWidthTrimpot = 0;
 volatile int pulseWidthSwitch = 0;
 volatile bool trimpotPinLast = false;
 volatile bool switchPinLast = false;
+int cyclesSincePrintLine = 0;
 
 #define THROTTLE_PIN A0
 #define THROTTLE_PIN_OUT 13
@@ -97,41 +98,46 @@ void loop() {
     //int forwardDistance = sonarForward.ping_cm();
     int verticalDistance = sonarHeight.ping_cm();
     //    int rightDistance = sonarRight.ping_cm(); // @todo
-    //Serial.print("forward: ");
-    //Serial.print(forwardDistance);
-    Serial.print("vertical: ");
-    Serial.print(verticalDistance);
-
-//    Serial.print("cm vertical:");
-//    Serial.print("(todo)"); // @ todo
-//    Serial.print("cm in ");
-//    Serial.print(millis());
-//    Serial.print("ms ");
 
     pidInput = verticalDistance;
     throttlePID.Compute();
-    Serial.print("PID out: ");
-    Serial.print(pidOutput);
-
-    Serial.print(" Throttle in: ");
-    Serial.print(pulseWidthThrottle);
-    Serial.print("us ");
-
-    Serial.print("Switch in: ");
-    Serial.print(pulseWidthSwitch);
-    Serial.print("us ");
-
-    Serial.print("Trimpot in: ");
-    Serial.print(pulseWidthTrimpot);
-    Serial.print("us ");
-
     int throttleInputDegrees = map(pulseWidthThrottle, 1000, 2000, 0, 180);
-    Serial.print("Throttle in: ");
-    Serial.print(throttleInputDegrees);
-
     int throttleOutputDegrees = throttleInputDegrees * pidOutput / 255;
-
-    Serial.print(" Throttle out: ");
-    Serial.println(throttleOutputDegrees);
     throttleOutputServo.write(throttleOutputDegrees);
+    if (cyclesSincePrintLine > 10) {
+        //Serial.print("forward: ");
+        //Serial.print(forwardDistance);
+        Serial.print("vertical: ");
+        Serial.print(verticalDistance);
+
+        //    Serial.print("cm vertical:");
+        //    Serial.print("(todo)"); // @ todo
+        //    Serial.print("cm in ");
+        //    Serial.print(millis());
+        //    Serial.print("ms ");
+
+        Serial.print("PID out: ");
+        Serial.print(pidOutput);
+
+        Serial.print(" Throttle in: ");
+        Serial.print(pulseWidthThrottle);
+        Serial.print("us ");
+
+        Serial.print("Switch in: ");
+        Serial.print(pulseWidthSwitch);
+        Serial.print("us ");
+
+        Serial.print("Trimpot in: ");
+        Serial.print(pulseWidthTrimpot);
+        Serial.print("us ");
+
+        Serial.print("Throttle in: ");
+        Serial.print(throttleInputDegrees);
+
+        Serial.print(" Throttle out: ");
+        Serial.println(throttleOutputDegrees);
+        cyclesSincePrintLine = 0;
+    } else {
+        cyclesSincePrintLine++;
+    }
 }
