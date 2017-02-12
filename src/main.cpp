@@ -5,7 +5,7 @@
  */
 
 #include <NewPing.h>
-#include <Servo.h>
+//#include <Servo.h>
 #include <PID_v1.h>
 
 #define TRIGGER_PIN_HEIGHT  3
@@ -45,7 +45,9 @@ int cyclesSincePrintLine = 0;
 double pidSetPoint, pidInput, pidOutput;
 PID throttlePID(&pidInput, &pidOutput, &pidSetPoint, 2, 5, 1, DIRECT);
 
-Servo throttleOutputServo;
+//Servo throttleOutputServo;
+unsigned int timer2DesiredValue;
+volatile int timerTriggerCount;
 
 ISR(PCINT0_vect) {
     if (digitalRead(TRIMPOT_PIN) == 0 && trimpotPinLast) {
@@ -67,8 +69,24 @@ ISR(PCINT0_vect) {
 ISR(PCINT1_vect) {
     if (digitalRead(THROTTLE_PIN) == 0) {
         pulseWidthThrottle = micros() - throttlePulseLastChangeMs;
+        digitalWrite(THROTTLE_PIN_OUT, LOW);
+        TIMSK2 &= ~(1 << TOIE2); // disable the timer overflow interrupt
     } else {
         throttlePulseLastChangeMs = micros();
+        digitalWrite(THROTTLE_PIN_OUT, HIGH);
+        TCNT2 = timer2DesiredValue; // set the timer count before interrupt
+        timerTriggerCount = 0;
+        TIMSK2 |= (1 << TOIE2); // enable the timer overflow interrupt
+    }
+}
+
+ISR(TIMER2_OVF_vect) {
+    if (timerTriggerCount > 0) {
+        // turn off the throttle PWM sooner that that provided by the RC receiver based on the distance of the sonar 
+        digitalWrite(THROTTLE_PIN_OUT, LOW);
+        TIMSK2 &= ~(1 << TOIE2); // disable the timer overflow interrupt
+    } else {
+        timerTriggerCount++;
     }
 }
 
@@ -83,11 +101,25 @@ void setup() {
     PCMSK0 |= (1 << PCINT1); // pin 9 trimpot
     PCMSK1 |= (1 << PCINT8); // pin A1 throttle
 
+    TIMSK2 &= ~(1 << TOIE2); // disable the timer overflow interrupt
+
+    TCCR2A &= ~((1 << WGM21) | (1 << WGM20)); // set timer2 to counting only
+    TCCR2B &= ~(1 << WGM22);
+    ASSR &= ~(1 << AS2); // set the timer2 source to the CPU clock
+    TIMSK2 &= ~(1 << OCIE2A); // disable the compare match on timer2
+
+    TCCR2B |= (1 << CS22); // set the timer2 pre scaler to 1024
+    TCCR2B |= (1 << CS21); // set the timer2 pre scaler to 1024
+    TCCR2B |= (1 << CS20); // set the timer2 pre scaler to 1024
+
+    timer2DesiredValue = 0; // setting an arbitary value before any sonar data is avaiable
+
     sei();
     pinMode(THROTTLE_PIN, INPUT);
     pinMode(SWITCH_PIN, INPUT);
     pinMode(TRIMPOT_PIN, INPUT);
-    throttleOutputServo.attach(THROTTLE_PIN_OUT);
+    pinMode(THROTTLE_PIN_OUT, OUTPUT);
+    //throttleOutputServo.attach(THROTTLE_PIN_OUT);
     pidInput = 60; //arbitrary initial value
     pidSetPoint = 60;
     throttlePID.SetMode(AUTOMATIC);
@@ -103,7 +135,10 @@ void loop() {
     throttlePID.Compute();
     int throttleInputDegrees = map(pulseWidthThrottle, 1000, 2000, 0, 180);
     int throttleOutputDegrees = throttleInputDegrees * pidOutput / 255;
-    throttleOutputServo.write(throttleOutputDegrees);
+    
+    // todo: the timer2DesiredValue value needs to be set according the the sonar input
+    timer2DesiredValue = 200;
+    //throttleOutputServo.write(throttleOutputDegrees);
     if (cyclesSincePrintLine > 10) {
         //Serial.print("forward: ");
         //Serial.print(forwardDistance);
