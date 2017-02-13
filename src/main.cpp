@@ -24,9 +24,9 @@ NewPing sonarHeight(TRIGGER_PIN_HEIGHT, ECHO_PIN_HEIGHT, MAX_DISTANCE);
 //NewPing sonarForward(TRIGGER_PIN_FORWARD, ECHO_PIN_FORWARD, MAX_DISTANCE);
 //NewPing sonarRight(TRIGGER_PIN_RIGHT, ECHO_PIN_RIGHT, MAX_DISTANCE);
 
-volatile unsigned long throttlePulseLastChangeMs = 0;
-volatile unsigned long trimpotPulseLastChangeMs = 0;
-volatile unsigned long switchPulseLastChangeMs = 0;
+volatile unsigned long throttlePulseLastChangeMicros = 0;
+volatile unsigned long trimpotPulseLastChangeMicros = 0;
+volatile unsigned long switchPulseLastChangeMicros = 0;
 volatile int pulseWidthThrottle = 0;
 volatile int pulseWidthTrimpot = 0;
 volatile int pulseWidthSwitch = 0;
@@ -46,48 +46,47 @@ double pidSetPoint, pidInput, pidOutput;
 PID throttlePID(&pidInput, &pidOutput, &pidSetPoint, 2, 5, 1, DIRECT);
 
 //Servo throttleOutputServo;
-unsigned int timer2DesiredValue;
-volatile int timerTriggerCount;
+unsigned int timer1DesiredValue;
+volatile unsigned long timer1ChangeMicros = 0;
+volatile unsigned long timer2StartMicros = 0;
 
 ISR(PCINT0_vect) {
     if (digitalRead(TRIMPOT_PIN) == 0 && trimpotPinLast) {
-        pulseWidthTrimpot = micros() - trimpotPulseLastChangeMs;
+        pulseWidthTrimpot = micros() - trimpotPulseLastChangeMicros;
         trimpotPinLast = false;
     } else if (digitalRead(TRIMPOT_PIN) == 1 && !trimpotPinLast) {
-        trimpotPulseLastChangeMs = micros();
+        trimpotPulseLastChangeMicros = micros();
         trimpotPinLast = true;
     }
     if (digitalRead(SWITCH_PIN) == 0 && switchPinLast) {
-        pulseWidthSwitch = micros() - switchPulseLastChangeMs;
+        pulseWidthSwitch = micros() - switchPulseLastChangeMicros;
         switchPinLast = false;
     } else if (digitalRead(SWITCH_PIN) == 1 && !switchPinLast) {
-        switchPulseLastChangeMs = micros();
+        switchPulseLastChangeMicros = micros();
         switchPinLast = true;
     }
 }
 
 ISR(PCINT1_vect) {
     if (digitalRead(THROTTLE_PIN) == 0) {
-        pulseWidthThrottle = micros() - throttlePulseLastChangeMs;
+        pulseWidthThrottle = micros() - throttlePulseLastChangeMicros;
         digitalWrite(THROTTLE_PIN_OUT, LOW);
-        TIMSK2 &= ~(1 << TOIE2); // disable the timer overflow interrupt
+        // TIMSK1 &= ~(1 << TOIE1); // disable the timer overflow interrupt
+        // timer1ChangeMicros = 0;
     } else {
-        throttlePulseLastChangeMs = micros();
+        throttlePulseLastChangeMicros = micros();
         digitalWrite(THROTTLE_PIN_OUT, HIGH);
-        TCNT2 = timer2DesiredValue; // set the timer count before interrupt
-        timerTriggerCount = 0;
-        TIMSK2 |= (1 << TOIE2); // enable the timer overflow interrupt
+        TCNT1 = timer1DesiredValue; // set the timer count before interrupt
+        timer2StartMicros = micros();
+        TIMSK1 |= (1 << TOIE1); // enable the timer overflow interrupt
     }
 }
 
-ISR(TIMER2_OVF_vect) {
-    if (timerTriggerCount > 0) {
-        // turn off the throttle PWM sooner that that provided by the RC receiver based on the distance of the sonar 
-        digitalWrite(THROTTLE_PIN_OUT, LOW);
-        TIMSK2 &= ~(1 << TOIE2); // disable the timer overflow interrupt
-    } else {
-        timerTriggerCount++;
-    }
+ISR(TIMER1_OVF_vect) {
+    // turn off the throttle PWM sooner than that provided by the RC receiver based on the distance of the sonar 
+    digitalWrite(THROTTLE_PIN_OUT, LOW);
+    TIMSK1 &= ~(1 << TOIE1); // disable the timer overflow interrupt
+    timer1ChangeMicros = micros() - timer2StartMicros;
 }
 
 void setup() {
@@ -101,18 +100,21 @@ void setup() {
     PCMSK0 |= (1 << PCINT1); // pin 9 trimpot
     PCMSK1 |= (1 << PCINT8); // pin A1 throttle
 
-    TIMSK2 &= ~(1 << TOIE2); // disable the timer overflow interrupt
+    TIMSK1 &= ~(1 << TOIE1); // disable the timer overflow interrupt
 
-    TCCR2A &= ~((1 << WGM21) | (1 << WGM20)); // set timer2 to counting only
-    TCCR2B &= ~(1 << WGM22);
-    ASSR &= ~(1 << AS2); // set the timer2 source to the CPU clock
-    TIMSK2 &= ~(1 << OCIE2A); // disable the compare match on timer2
+    // set timer1 to counting only
+    TCCR1A &= ~(1 << WGM10);
+    TCCR1A &= ~(1 << WGM11);
+    TCCR1B &= ~(1 << WGM12);
+    TCCR1B &= ~(1 << WGM13);
 
-    TCCR2B |= (1 << CS22); // set the timer2 pre scaler to 1024
-    TCCR2B |= (1 << CS21); // set the timer2 pre scaler to 1024
-    TCCR2B |= (1 << CS20); // set the timer2 pre scaler to 1024
+    TIMSK1 &= ~(1 << OCIE1A); // disable the compare match on timer2
 
-    timer2DesiredValue = 0; // setting an arbitary value before any sonar data is avaiable
+    TCCR1B |= (1 << CS12); // set the timer2 pre scaler to 1024
+    TCCR1B |= (1 << CS11); // set the timer2 pre scaler to 1024
+    TCCR1B |= (1 << CS10); // set the timer2 pre scaler to 1024
+
+    timer1DesiredValue = 0; // setting an arbitary value before any sonar data is avaiable
 
     sei();
     pinMode(THROTTLE_PIN, INPUT);
@@ -135,13 +137,17 @@ void loop() {
     throttlePID.Compute();
     int throttleInputDegrees = map(pulseWidthThrottle, 1000, 2000, 0, 180);
     int throttleOutputDegrees = throttleInputDegrees * pidOutput / 255;
-    
-    // todo: the timer2DesiredValue value needs to be set according the the sonar input
-    timer2DesiredValue = 200;
+
     //throttleOutputServo.write(throttleOutputDegrees);
     if (cyclesSincePrintLine > 10) {
         //Serial.print("forward: ");
         //Serial.print(forwardDistance);
+
+        Serial.print(timer1ChangeMicros);
+
+        Serial.print(" : ");
+        Serial.print(timer1DesiredValue);
+
         Serial.print("vertical: ");
         Serial.print(verticalDistance);
 
@@ -151,7 +157,7 @@ void loop() {
         //    Serial.print(millis());
         //    Serial.print("ms ");
 
-        Serial.print("PID out: ");
+        Serial.print(" PID out: ");
         Serial.print(pidOutput);
 
         Serial.print(" Throttle in: ");
@@ -174,5 +180,52 @@ void loop() {
         cyclesSincePrintLine = 0;
     } else {
         cyclesSincePrintLine++;
+    }
+    if (Serial.available() > 0) {
+        int inByte = Serial.read();
+        switch (inByte) {
+            case 'p':
+
+                break;
+            case 'P':
+
+                break;
+            case 'i':
+
+                break;
+            case 'I':
+
+                break;
+            case 'd':
+
+                break;
+            case 'D':
+
+                break;
+            case 'Q':
+                TCCR1B |= (1 << CS12); // set the timer2 pre scaler to 1024
+                break;
+            case 'W':
+                TCCR1B |= (1 << CS11); // set the timer2 pre scaler to 1024
+                break;
+            case 'E':
+                TCCR1B |= (1 << CS10); // set the timer2 pre scaler to 1024
+                break;
+            case 'q':
+                TCCR1B &= ~(1 << CS12); // set the timer2 pre scaler to 1024
+                break;
+            case 'w':
+                TCCR1B &= ~(1 << CS11); // set the timer2 pre scaler to 1024
+                break;
+            case 'e':
+                TCCR1B &= ~(1 << CS10); // set the timer2 pre scaler to 1024
+                break;
+            case 'a':
+                timer1DesiredValue = 2000;
+                break;
+            case 's':
+                timer1DesiredValue = 100;
+                break;
+        }
     }
 }
