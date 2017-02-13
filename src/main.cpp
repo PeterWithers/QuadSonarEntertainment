@@ -71,8 +71,8 @@ ISR(PCINT1_vect) {
     if (digitalRead(THROTTLE_PIN) == 0) {
         pulseWidthThrottle = micros() - throttlePulseLastChangeMicros;
         digitalWrite(THROTTLE_PIN_OUT, LOW);
-        // TIMSK1 &= ~(1 << TOIE1); // disable the timer overflow interrupt
-        // timer1ChangeMicros = 0;
+        TIMSK1 &= ~(1 << TOIE1); // disable the timer overflow interrupt
+        timer1ChangeMicros = 0;
     } else {
         throttlePulseLastChangeMicros = micros();
         digitalWrite(THROTTLE_PIN_OUT, HIGH);
@@ -87,6 +87,7 @@ ISR(TIMER1_OVF_vect) {
     digitalWrite(THROTTLE_PIN_OUT, LOW);
     TIMSK1 &= ~(1 << TOIE1); // disable the timer overflow interrupt
     timer1ChangeMicros = micros() - timer2StartMicros;
+    //timer2StartMicros = micros();
 }
 
 void setup() {
@@ -111,11 +112,11 @@ void setup() {
     TIMSK1 &= ~(1 << OCIE1A); // disable the compare match on timer2
 
     TCCR1B |= (1 << CS12); // set the timer2 pre scaler to 1024
-    TCCR1B |= (1 << CS11); // set the timer2 pre scaler to 1024
+    TCCR1B &= ~(1 << CS11); // set the timer2 pre scaler to 1024
     TCCR1B |= (1 << CS10); // set the timer2 pre scaler to 1024
 
     timer1DesiredValue = 0; // setting an arbitary value before any sonar data is avaiable
-
+    //TIMSK1 |= (1 << TOIE1); // enable the timer overflow interrupt
     sei();
     pinMode(THROTTLE_PIN, INPUT);
     pinMode(SWITCH_PIN, INPUT);
@@ -221,10 +222,12 @@ void loop() {
                 TCCR1B &= ~(1 << CS10); // set the timer2 pre scaler to 1024
                 break;
             case 'a':
-                timer1DesiredValue = 2000;
+                timer1DesiredValue -= 100;
+                timer1DesiredValue = (timer1DesiredValue < 0) ? 0 : timer1DesiredValue;
                 break;
             case 's':
-                timer1DesiredValue = 100;
+                timer1DesiredValue += 100;
+                timer1DesiredValue = (timer1DesiredValue > 0xffff) ? timer1DesiredValue = 0xffff : timer1DesiredValue;
                 break;
         }
     }
