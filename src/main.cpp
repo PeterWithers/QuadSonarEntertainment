@@ -45,8 +45,7 @@ int cyclesSincePrintLine = 0;
 double pidSetPoint, pidInput, pidOutput;
 PID throttlePID(&pidInput, &pidOutput, &pidSetPoint, 2, 5, 1, DIRECT);
 
-//Servo throttleOutputServo;
-unsigned int timer1DesiredValue;
+unsigned long timer1DesiredValue;
 volatile unsigned long timer1ChangeMicros = 0;
 volatile unsigned long timer2StartMicros = 0;
 
@@ -71,23 +70,24 @@ ISR(PCINT1_vect) {
     if (digitalRead(THROTTLE_PIN) == 0) {
         pulseWidthThrottle = micros() - throttlePulseLastChangeMicros;
         digitalWrite(THROTTLE_PIN_OUT, LOW);
-        TIMSK1 &= ~(1 << TOIE1); // disable the timer overflow interrupt
-        timer1ChangeMicros = 0;
+        //timer1ChangeMicros = TCNT1; // collecting the timer value here can provide useful debug data
+        TIMSK1 &= ~(1 << OCIE1A); // disable the compare interrupt
     } else {
         throttlePulseLastChangeMicros = micros();
         digitalWrite(THROTTLE_PIN_OUT, HIGH);
-        TCNT1 = timer1DesiredValue; // set the timer count before interrupt
+        TCNT1 = 0; // reset the timer count before interrupt
+        OCR1A = timer1DesiredValue;
         timer2StartMicros = micros();
-        TIMSK1 |= (1 << TOIE1); // enable the timer overflow interrupt
+        TIFR1 |= (1 << OCF1A); // clear the timer interrupt flag
+        TIMSK1 |= (1 << OCIE1A); // enable the compare interrupt
     }
 }
 
-ISR(TIMER1_OVF_vect) {
+ISR(TIMER1_COMPA_vect) {
     // turn off the throttle PWM sooner than that provided by the RC receiver based on the distance of the sonar 
     digitalWrite(THROTTLE_PIN_OUT, LOW);
-    TIMSK1 &= ~(1 << TOIE1); // disable the timer overflow interrupt
     timer1ChangeMicros = micros() - timer2StartMicros;
-    //timer2StartMicros = micros();
+    TIMSK1 &= ~(1 << OCIE1A); // disable the compare interrupt
 }
 
 void setup() {
@@ -102,27 +102,26 @@ void setup() {
     PCMSK1 |= (1 << PCINT8); // pin A1 throttle
 
     TIMSK1 &= ~(1 << TOIE1); // disable the timer overflow interrupt
-
-    // set timer1 to counting only
-    TCCR1A &= ~(1 << WGM10);
-    TCCR1A &= ~(1 << WGM11);
-    TCCR1B &= ~(1 << WGM12);
-    TCCR1B &= ~(1 << WGM13);
-
     TIMSK1 &= ~(1 << OCIE1A); // disable the compare match on timer2
 
-    TCCR1B |= (1 << CS12); // set the timer2 pre scaler to 1024
-    TCCR1B &= ~(1 << CS11); // set the timer2 pre scaler to 1024
-    TCCR1B |= (1 << CS10); // set the timer2 pre scaler to 1024
+    // set timer1 mode
+    TCCR1A &= ~(1 << WGM10);
+    TCCR1A &= ~(1 << WGM11);
+    TCCR1B != (1 << WGM12); // CTC mode
+    TCCR1B &= ~(1 << WGM13);
 
-    timer1DesiredValue = 0; // setting an arbitary value before any sonar data is avaiable
-    //TIMSK1 |= (1 << TOIE1); // enable the timer overflow interrupt
+
+    TCCR1B &= ~(1 << CS12); // set the timer2 pre scaler
+    TCCR1B &= ~(1 << CS11); // set the timer2 pre scaler
+    TCCR1B |= (1 << CS10); // set the timer2 pre scaler
+    // when timer1 is directly connected to CLK the high portion of the PPM input lasts between 16000 - 32000 timer counts depending on the throttle position.
+
+    timer1DesiredValue = 25000; // setting an arbitary value before any sonar data is available
     sei();
     pinMode(THROTTLE_PIN, INPUT);
     pinMode(SWITCH_PIN, INPUT);
     pinMode(TRIMPOT_PIN, INPUT);
     pinMode(THROTTLE_PIN_OUT, OUTPUT);
-    //throttleOutputServo.attach(THROTTLE_PIN_OUT);
     pidInput = 60; //arbitrary initial value
     pidSetPoint = 60;
     throttlePID.SetMode(AUTOMATIC);
@@ -139,7 +138,6 @@ void loop() {
     int throttleInputDegrees = map(pulseWidthThrottle, 1000, 2000, 0, 180);
     int throttleOutputDegrees = throttleInputDegrees * pidOutput / 255;
 
-    //throttleOutputServo.write(throttleOutputDegrees);
     if (cyclesSincePrintLine > 10) {
         //Serial.print("forward: ");
         //Serial.print(forwardDistance);
