@@ -43,7 +43,8 @@ int cyclesSincePrintLine = 0;
 
 //PID variables
 double pidSetPoint, pidInput, pidOutput;
-PID throttlePID(&pidInput, &pidOutput, &pidSetPoint, 2, 5, 1, DIRECT);
+double throttleP = 4, throttleI = 0.2, throttleD = 1;
+PID throttlePID(&pidInput, &pidOutput, &pidSetPoint, throttleP, throttleI, throttleD, DIRECT);
 
 unsigned long timer1DesiredValue;
 volatile unsigned long timer1ChangeMicros = 0;
@@ -70,7 +71,7 @@ ISR(PCINT1_vect) {
     if (digitalRead(THROTTLE_PIN) == 0) {
         pulseWidthThrottle = micros() - throttlePulseLastChangeMicros;
         digitalWrite(THROTTLE_PIN_OUT, LOW);
-        //timer1ChangeMicros = TCNT1; // collecting the timer value here can provide useful debug data
+        timer1ChangeMicros = TCNT1; // collecting the timer value here can provide useful debug data
         TIMSK1 &= ~(1 << OCIE1A); // disable the compare interrupt
     } else {
         throttlePulseLastChangeMicros = micros();
@@ -86,7 +87,7 @@ ISR(PCINT1_vect) {
 ISR(TIMER1_COMPA_vect) {
     // turn off the throttle PWM sooner than that provided by the RC receiver based on the distance of the sonar 
     digitalWrite(THROTTLE_PIN_OUT, LOW);
-    timer1ChangeMicros = micros() - timer2StartMicros;
+    //    timer1ChangeMicros = micros() - timer2StartMicros;
     TIMSK1 &= ~(1 << OCIE1A); // disable the compare interrupt
 }
 
@@ -107,7 +108,7 @@ void setup() {
     // set timer1 mode
     TCCR1A &= ~(1 << WGM10);
     TCCR1A &= ~(1 << WGM11);
-    TCCR1B != (1 << WGM12); // CTC mode
+    TCCR1B &= ~(1 << WGM12); // normal mode
     TCCR1B &= ~(1 << WGM13);
 
 
@@ -135,8 +136,7 @@ void loop() {
 
     pidInput = verticalDistance;
     throttlePID.Compute();
-    int throttleInputDegrees = map(pulseWidthThrottle, 1000, 2000, 0, 180);
-    int throttleOutputDegrees = throttleInputDegrees * pidOutput / 255;
+    int timer1DesiredValue = (map(pulseWidthThrottle, 1000, 2000, 0, 16000) * pidOutput / 255) + 16000;
 
     if (cyclesSincePrintLine > 10) {
         //Serial.print("forward: ");
@@ -147,7 +147,7 @@ void loop() {
         Serial.print(" : ");
         Serial.print(timer1DesiredValue);
 
-        Serial.print("vertical: ");
+        Serial.print(" vertical: ");
         Serial.print(verticalDistance);
 
         //    Serial.print("cm vertical:");
@@ -156,7 +156,13 @@ void loop() {
         //    Serial.print(millis());
         //    Serial.print("ms ");
 
-        Serial.print(" PID out: ");
+        Serial.print(" P: ");
+        Serial.print(throttleP);
+        Serial.print(" I: ");
+        Serial.print(throttleI);
+        Serial.print(" D: ");
+        Serial.print(throttleD);
+        Serial.print(" PID: ");
         Serial.print(pidOutput);
 
         Serial.print(" Throttle in: ");
@@ -169,13 +175,8 @@ void loop() {
 
         Serial.print("Trimpot in: ");
         Serial.print(pulseWidthTrimpot);
-        Serial.print("us ");
+        Serial.println("us ");
 
-        Serial.print("Throttle in: ");
-        Serial.print(throttleInputDegrees);
-
-        Serial.print(" Throttle out: ");
-        Serial.println(throttleOutputDegrees);
         cyclesSincePrintLine = 0;
     } else {
         cyclesSincePrintLine++;
@@ -184,22 +185,28 @@ void loop() {
         int inByte = Serial.read();
         switch (inByte) {
             case 'p':
-
+                throttleP -= 0.1;
+                throttlePID.SetTunings(throttleP, throttleI, throttleD);
                 break;
             case 'P':
-
+                throttleP += 0.1;
+                throttlePID.SetTunings(throttleP, throttleI, throttleD);
                 break;
             case 'i':
-
+                throttleI -= 0.1;
+                throttlePID.SetTunings(throttleP, throttleI, throttleD);
                 break;
             case 'I':
-
+                throttleI += 0.1;
+                throttlePID.SetTunings(throttleP, throttleI, throttleD);
                 break;
             case 'd':
-
+                throttleD -= 0.1;
+                throttlePID.SetTunings(throttleP, throttleI, throttleD);
                 break;
             case 'D':
-
+                throttleD += 0.1;
+                throttlePID.SetTunings(throttleP, throttleI, throttleD);
                 break;
             case 'Q':
                 TCCR1B |= (1 << CS12); // set the timer2 pre scaler to 1024
@@ -218,14 +225,6 @@ void loop() {
                 break;
             case 'e':
                 TCCR1B &= ~(1 << CS10); // set the timer2 pre scaler to 1024
-                break;
-            case 'a':
-                timer1DesiredValue -= 100;
-                timer1DesiredValue = (timer1DesiredValue < 0) ? 0 : timer1DesiredValue;
-                break;
-            case 's':
-                timer1DesiredValue += 100;
-                timer1DesiredValue = (timer1DesiredValue > 0xffff) ? timer1DesiredValue = 0xffff : timer1DesiredValue;
                 break;
         }
     }
