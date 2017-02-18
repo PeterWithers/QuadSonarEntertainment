@@ -46,7 +46,7 @@ double pidSetPoint, pidInput, pidOutput;
 double throttleP = 4, throttleI = 0.2, throttleD = 1;
 PID throttlePID(&pidInput, &pidOutput, &pidSetPoint, throttleP, throttleI, throttleD, DIRECT);
 
-unsigned long timer1DesiredValue;
+volatile unsigned long timer1DesiredValue;
 volatile unsigned long timer1ChangeMicros = 0;
 volatile unsigned long timer2StartMicros = 0;
 
@@ -136,7 +136,7 @@ void loop() {
 
     pidInput = verticalDistance;
     throttlePID.Compute();
-    int timer1DesiredValue = (map(pulseWidthThrottle, 1000, 2000, 0, 16000) * pidOutput / 255) + 16000;
+    timer1DesiredValue = (map(pulseWidthThrottle, 1000, 2000, 0, 16000) * pidOutput / 255) + 16000;
 
     if (cyclesSincePrintLine > 10) {
         //Serial.print("forward: ");
