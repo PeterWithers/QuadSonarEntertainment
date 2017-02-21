@@ -43,7 +43,7 @@ int cyclesSincePrintLine = 0;
 
 //PID variables
 double pidSetPoint, pidInput, pidOutput;
-double throttleP = 3.0, throttleI = 0.2, throttleD = 0.0;
+double throttleP = 2.70, throttleI = 0.60, throttleD = 0.1;
 PID throttlePID(&pidInput, &pidOutput, &pidSetPoint, throttleP, throttleI, throttleD, DIRECT);
 
 volatile unsigned long timer1DesiredValue;
@@ -134,14 +134,12 @@ void loop() {
     int verticalDistance = sonarHeight.ping_cm();
     //    int rightDistance = sonarRight.ping_cm(); // @todo
 
-    if (verticalDistance > 0) {
-        // ignore zero values from the sonar, since it cannot read a zero difference
-        pidInput = verticalDistance;
-        pidSetPoint = map(pulseWidthThrottle, 1000, 2000, 0, 60);
-        throttlePID.Compute();
-//        timer1DesiredValue = (map(pulseWidthThrottle, 1000, 2000, 0, 16000) * pidOutput / 255) + 16000;
-        timer1DesiredValue = map(pidOutput, 0, 255, 16000, 32000);
-    }
+    pidInput = verticalDistance;
+    pidSetPoint = map(pulseWidthThrottle, 1000, 2000, 0, 60);
+    throttlePID.Compute();
+    //        timer1DesiredValue = (map(pulseWidthThrottle, 1000, 2000, 0, 16000) * pidOutput / 255) + 16000;
+    timer1DesiredValue = map(pidOutput, 0, 255, 16000, 32000);
+
     if (cyclesSincePrintLine > 10) {
         //Serial.print("forward: ");
         //Serial.print(forwardDistance);
